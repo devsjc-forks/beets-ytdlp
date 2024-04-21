@@ -143,7 +143,10 @@ class YTDLPPlugin(BeetsPlugin):
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
-            'outtmpl': self.cache_dir + "/" + ad.artist + "/" + ad.title + "/%(id)s.%(ext)s"
+            'outtmpl': self.cache_dir + "/" + ad.artist + "/" + ad.title + "/%(id)s.%(ext)s",
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+            }],
         }
 
         with YoutubeDL(ydl_opts) as ydl:
