@@ -2,12 +2,10 @@ from beets import config
 import dataclasses
 from beets import ui
 from beets.plugins import BeetsPlugin
-from optparse import OptionParser
+import optparse
 from ytmusicapi import YTMusic
 from yt_dlp import YoutubeDL
-import glob
 import os
-import shutil
 import subprocess
 
 class Colors():
@@ -55,7 +53,7 @@ class YTDLPPlugin(BeetsPlugin):
     def commands(self):
         """Add commands to beets CLI."""
 
-        def ytdlp_func(lib, opts, args):
+        def ytdlp_func(lib, opts: optparse.Values, args: list[str]):
             """Download albums from YouTube and import into beets."""
             if len(args) < 2:
                 print("[ytdlp] Please provide the artist and album names.")
@@ -86,23 +84,23 @@ class YTDLPPlugin(BeetsPlugin):
 
         return [ytdlp_command]
 
-    def _parser(self) -> OptionParser:
+    def _parser(self) -> optparse.OptionParser:
         """Defines the parser for the ytdlp subcommand."""
-        parser = OptionParser()
+        parser = optparse.OptionParser()
         parser.add_option(
-            '--artist',
+            "--artist",
+            action="store",
             help="Name of artist",
-            required=True,
         )
         parser.add_option(
-            '--album',
+            "--album",
+            action="store",
             help="Name of album",
-            required=True,
         )
         parser.add_option(
             "-u", "--url",
             dest="url",
-            required=False,
+            action="store",
             help="URL of YouTube playlist to download. Bypasses search.",
         )
         parser.add_option(
