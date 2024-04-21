@@ -90,12 +90,14 @@ class YTDLPPlugin(BeetsPlugin):
         """Defines the parser for the ytdlp subcommand."""
         parser = OptionParser()
         parser.add_option(
-            'artist',
-            help="Name of artist of album",
+            '--artist',
+            help="Name of artist",
+            required=True,
         )
         parser.add_option(
-            'album',
+            '--album',
             help="Name of album",
+            required=True,
         )
         parser.add_option(
             "-u", "--url",
