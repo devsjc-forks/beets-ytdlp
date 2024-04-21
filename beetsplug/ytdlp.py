@@ -107,6 +107,7 @@ class YTDLPPlugin(BeetsPlugin):
         )
         parser.add_option(
             "-v", "--verbose",
+            action="store_true",
             dest="verbose",
             default=False,
         )
