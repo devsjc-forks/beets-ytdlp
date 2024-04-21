@@ -58,7 +58,7 @@ class YTDLPPlugin(BeetsPlugin):
             if self.config.get("verbose"):
                 print(f"[ytdlp] Running ytdlp with opts: {opts}")
 
-            album_details = self._get_album_details(opts.artist, opts.album, opts.url if opts.url else None)
+            album_details = self._get_album_details(opts.artist, opts.album, opts.url)
             if not album_details:
                 return
 
@@ -124,7 +124,7 @@ class YTDLPPlugin(BeetsPlugin):
             print('[ytdlp] Or consider passing in the url to a playlist via the --url flag.')
             return None
         album_details: dict = ytmusic.get_album(search_results[0]['browseId'])
-        available_tracks: bool = all([track['available'] for track in album_details['tracks']])
+        available_tracks: bool = all([track['isAvailable'] for track in album_details['tracks']])
         if not available_tracks:
             print(f'[ytdlp] Not all tracks are available for {album} by {artist}')
             print("[ytdlp] Consider passing in the url to a playlist via the --url flag.")
