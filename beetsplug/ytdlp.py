@@ -142,6 +142,7 @@ class YTDLPPlugin(BeetsPlugin):
 
         ydl_opts = {
             'format': 'bestaudio/best',
+            'extractaudio': True,
             'outtmpl': self.cache_dir + "/" + ad.artist + "/" + ad.title + "/%(id)s.%(ext)s"
         }
 
@@ -154,14 +155,22 @@ class YTDLPPlugin(BeetsPlugin):
 
         return self.cache_dir + "/" + ad.artist + "/" + ad.title
 
-    def _import_album(self, album_dir: str):
+    def _import_album(self, album_dir: str) -> str | None:
         """Import album into beets."""
         beet_cmd = ['beet', 'import', '-m', album_dir]
         if os.getenv('BEETS_ENV') == 'develop':
             beet_cmd.extend(['-c', 'env.config.yml'])
         if self.config.get('verbose'):
             print("[ytdlp] Running beets: " + ' '.join(beet_cmd))
-            beet_cmd.extend(['-v'])
-        subprocess.run(beet_cmd)
+        process = subprocess.run(beet_cmd)
+        if process.returncode != 0:
+            print(f"[ytdlp] Error importing {album_dir} into beets")
+            return None
 
+        return album_dir
+
+    def _clear_cache(self, album_dir: str) -> None:
+        """Clear the cache of downloaded albums."""
+        os.remove(album_dir)
+        
 
