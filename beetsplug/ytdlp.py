@@ -55,6 +55,8 @@ class YTDLPPlugin(BeetsPlugin):
 
         def ytdlp_func(lib, opts: optparse.Values, args: list[str]):
             """Download albums from YouTube and import into beets."""
+            if self.config.get("varbose"):
+                print(f"[ytdlp] Running ytdlp with args: {args}")
             if len(args) < 2:
                 print("[ytdlp] Please provide the artist and album names.")
                 return
