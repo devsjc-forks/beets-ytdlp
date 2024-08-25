@@ -46,7 +46,7 @@ class YTDLPPlugin(BeetsPlugin):
         super(YTDLPPlugin, self).__init__()
 
         self.config_dir = config.config_dir()
-        self.cache_dir = self.config_dir + "/yt_dlp"
+        self.cache_dir = config["directory"].get() + "/.import"
 
         # Default options
         self._config = {
@@ -256,7 +256,7 @@ class YTDLPPlugin(BeetsPlugin):
 
     def _import_singleton(self, track_dir: str) -> str | None:
         """Import track into beets."""
-        beet_cmd = ['beet', 'import', '-m', '-s', track_dir]
+        beet_cmd = ['beet', 'import', '-m', track_dir]
         if os.getenv('BEETS_ENV') == 'develop':
             beet_cmd.extend(['-c', 'env.config.yml'])
         if self.config.get('verbose'):
