@@ -116,8 +116,8 @@ class YTDLPPlugin(BeetsPlugin):
                     f"{Colors.WARNING}[ytdlp] Invalid arguments. Please specify either:",
                     "\t--artist and --album",
                     "\t--artist and --track",
-                    "\t--fetch-missing{Colors.END}"
-                ))
+                    "\t--fetch-missing{Colors.END}",
+                )))
                 return
 
         ytdlp_command = ui.Subcommand(
@@ -129,7 +129,8 @@ class YTDLPPlugin(BeetsPlugin):
 
         return [ytdlp_command]
 
-    def _parser(self) -> optparse.OptionParser:
+    @staticmethod
+    def _parser() -> optparse.OptionParser:
         """Defines the parser for the ytdlp subcommand."""
         parser = optparse.OptionParser()
         
@@ -294,6 +295,10 @@ class YTDLPPlugin(BeetsPlugin):
         ui.commands.import_cmd.func(lib, opts, args)
 
         return track_dir
+
+    def _list_missing(self, lib) -> list[AlbumDetails]:
+        print("Not yet implemented")
+        return []
 
     def _clear_cache(self, d: str) -> None:
         """Clear the cache of downloaded files."""
