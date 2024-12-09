@@ -3,10 +3,10 @@ import dataclasses
 from beets import ui
 from beets.plugins import BeetsPlugin
 import optparse
+import mediafile
 from ytmusicapi import YTMusic
 from yt_dlp import YoutubeDL
 import os
-import subprocess
 
 class Colors():
     INFO = '\033[94m'
@@ -55,9 +55,19 @@ class YTDLPPlugin(BeetsPlugin):
         self._config.update(self.config)
         self.config = self._config
 
-        # be verbose if beets is verbose
+        # Be verbose if beets is verbose
         if not self.config.get('verbose'):
             self.config['verbose'] = True
+
+        # Custom metadata fields
+        # See
+        # - https://discourse.beets.io/t/how-to-use-custom-fields/202
+        # - https://beets.readthedocs.io/en/stable/dev/plugins.html#extend-mediafile
+        source_url_field = mediafile.MediaField(
+            mediafile.MP3DescStorageStyle(u'SourceURL'),
+            mediafile.StorageStyle(u'WOAF'),
+        )
+        self.add_media_field(u'source_url', source_url_field)
 
     def commands(self):
         """Add commands to beets CLI."""
@@ -67,25 +77,8 @@ class YTDLPPlugin(BeetsPlugin):
             if self.config.get("verbose"):
                 print(f"[ytdlp] Running ytdlp with opts: {opts}")
 
-            if opts.track and opts.album:
-                print(f"{Colors.WARNING}[ytdlp] Cannot specify both track and album{Colors.END}")
-                return
-            
-            if opts.track:
-                track_details = self._get_track_details(opts.artist, opts.track, opts.url)
-                if not track_details:
-                    return
-
-                track_dir = self._download_singleton(track_details)
-                if not track_dir:
-                    return
-
-                self._import_singleton(track_dir)
-
-                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {track_details}{Colors.END}")
-                return
-
-            if opts.album:
+            # Album download mode
+            if opts.artist and opts.album and not opts.track:
                 album_details = self._get_album_details(opts.artist, opts.album, opts.url)
                 if not album_details:
                     return
@@ -94,9 +87,37 @@ class YTDLPPlugin(BeetsPlugin):
                 if not album_dir:
                     return
 
-                self._import_album(album_dir)
+                self._import_album(lib, album_dir)
 
                 print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {album_details}{Colors.END}")
+                return
+
+            # Track download mode
+            if opts.artist and opts.track and not opts.album:
+                track_details = self._get_track_details(opts.artist, opts.track, opts.url)
+                if not track_details:
+                    return
+
+                track_dir = self._download_singleton(track_details)
+                if not track_dir:
+                    return
+
+                self._import_singleton(lib, track_dir)
+
+                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {track_details}{Colors.END}")
+                return
+
+            # Missing items mode
+            if opts.fetch_missing:
+                missing_albums: list[AlbumDetails] = self._list_missing(lib)
+
+            else:
+                print("\n".join((
+                    f"{Colors.WARNING}[ytdlp] Invalid arguments. Please specify either:",
+                    "\t--artist and --album",
+                    "\t--artist and --track",
+                    "\t--fetch-missing{Colors.END}"
+                ))
                 return
 
         ytdlp_command = ui.Subcommand(
@@ -111,6 +132,7 @@ class YTDLPPlugin(BeetsPlugin):
     def _parser(self) -> optparse.OptionParser:
         """Defines the parser for the ytdlp subcommand."""
         parser = optparse.OptionParser()
+        
         parser.add_option(
             "--artist",
             action="store",
@@ -137,6 +159,11 @@ class YTDLPPlugin(BeetsPlugin):
             action="store_true",
             dest="verbose",
             default=False,
+        )
+        parser.add_option(
+            "--fetch-missing",
+            action="store_true",
+            help="Fetch missing items from YouTube",
         )
 
         return parser 
@@ -240,31 +267,31 @@ class YTDLPPlugin(BeetsPlugin):
 
         return self.cache_dir + "/" + sd.artist
 
-    def _import_album(self, album_dir: str) -> str | None:
+    def _import_album(self, lib, album_dir: str) -> str | None:
         """Import album into beets."""
-        beet_cmd = ['beet', 'import', '-m', album_dir]
+        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir])
         if os.getenv('BEETS_ENV') == 'develop':
-            beet_cmd.extend(['-c', 'env.config.yml'])
+            opts, args = ui.commands.import_cmd.parse_args(
+                ["-m", album_dir, "--config", "env.config.yml"],
+            )
         if self.config.get('verbose'):
-            print("[ytdlp] Running beets: " + ' '.join(beet_cmd))
-        process = subprocess.run(beet_cmd)
-        if process.returncode != 0:
-            print(f"[ytdlp] Error importing {album_dir} into beets")
-            return None
+            print("[ytdlp] Running beet import with opts: " + str(opts))
+
+        ui.commands.import_cmd.func(lib, opts, args)
 
         return album_dir
 
-    def _import_singleton(self, track_dir: str) -> str | None:
+    def _import_singleton(self, lib, track_dir: str) -> str | None:
         """Import track into beets."""
-        beet_cmd = ['beet', 'import', '-m', track_dir]
+        opts, args = ui.commands.import_cmd.parse_args(["-m", track_dir])
         if os.getenv('BEETS_ENV') == 'develop':
-            beet_cmd.extend(['-c', 'env.config.yml'])
+            opts, args = ui.commands.import_cmd.parse_args(
+                ["-m", track_dir, "--config", "env.config.yml"],
+            )
         if self.config.get('verbose'):
-            print("[ytdlp] Running beets: " + ' '.join(beet_cmd))
-        process = subprocess.run(beet_cmd)
-        if process.returncode != 0:
-            print(f"[ytdlp] Error importing {track_dir} into beets")
-            return None
+            print("[ytdlp] Running beet import with opts: " + str(opts))
+
+        ui.commands.import_cmd.func(lib, opts, args)
 
         return track_dir
 
