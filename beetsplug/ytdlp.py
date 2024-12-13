@@ -6,7 +6,11 @@ import optparse
 import mediafile
 from ytmusicapi import YTMusic
 from yt_dlp import YoutubeDL
+import shutil
 import os
+import pathlib
+import dacite
+from collections.abc import Iterator
 
 class Colors():
     INFO = '\033[94m'
@@ -16,22 +20,45 @@ class Colors():
     END = '\033[0m'
 
 @dataclasses.dataclass
-class AlbumDetails:
-    title: str
-    artist: str
-    playlist_url: str
-
-    def __str__(self):
-        return f'{self.title} by {self.artist}'
+class ArtistMetadata:
+    name: str
+    id: str
 
 @dataclasses.dataclass
-class SingletonDetails:
+class TrackMetadata:
     title: str
-    artist: str
-    track_url: str
+    artists: list[ArtistMetadata]
+    trackNumber: int
+    videoId: str
+    album: str
+    isAvailable: bool
 
-    def __str__(self):
-        return f'{self.title} by {self.artist}'
+    def url(self) -> str:
+        return "https://youtube.com/watch?v=" + self.videoId
+
+    def __str__(self) -> str:
+        return f'{self.title} by {self.artists[0].name}'
+
+@dataclasses.dataclass
+class AlbumMetadata:
+    title: str
+    artists: list[ArtistMetadata]
+    trackCount: int
+    audioPlaylistId: str
+    tracks: list[TrackMetadata]
+
+    def url(self) -> str:
+        return "https://youtube.com/playlist?list=" + self.audioPlaylistId
+
+    def __str__(self) -> str:
+        return f'{self.title} by {self.artists[0].name}'
+
+    def available_tracks(self) -> list[TrackMetadata]:
+        return [track for track in self.tracks if track.isAvailable]
+
+    def track_iterator(self) -> Iterator[TrackMetadata]:
+        for track in self.available_tracks():
+            yield track
 
 class YTDLPPlugin(BeetsPlugin):
     """A plugin for downloading music from YouTube and importing into beets."""
@@ -40,18 +67,16 @@ class YTDLPPlugin(BeetsPlugin):
     config_dir: str
     cache_dir: str
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         """Set default values."""
 
         super(YTDLPPlugin, self).__init__()
 
-        self.config_dir = config.config_dir()
-        self.cache_dir = config["directory"].get() + "/.import"
+        self.config_dir: str = config.config_dir()
+        self.cache_dir: pathlib.Path = pathlib.Path(config["directory"].get() + "/.import")
 
         # Default options
-        self._config = {
-            'verbose': False,
-        }
+        self._config = {'verbose': False}
         self._config.update(self.config)
         self.config = self._config
 
@@ -63,23 +88,23 @@ class YTDLPPlugin(BeetsPlugin):
         # See
         # - https://discourse.beets.io/t/how-to-use-custom-fields/202
         # - https://beets.readthedocs.io/en/stable/dev/plugins.html#extend-mediafile
-        source_url_field = mediafile.MediaField(
-            mediafile.MP3DescStorageStyle(u'SourceURL'),
-            mediafile.StorageStyle(u'WOAF'),
-        )
-        self.add_media_field(u'source_url', source_url_field)
+        # source_url_field = mediafile.MediaField(
+        #    mediafile.MP3DescStorageStyle(u'SourceURL'),
+        #    mediafile.StorageStyle(u'WOAF'),
+        # )
+        # self.add_media_field(u'url', source_url_field)
 
     def commands(self):
         """Add commands to beets CLI."""
 
-        def ytdlp_func(lib, opts: optparse.Values, args: list[str]):
+        def ytdlp_func(lib, opts: optparse.Values, args: list[str]) -> None:
             """Download albums from YouTube and import into beets."""
             if self.config.get("verbose"):
                 print(f"[ytdlp] Running ytdlp with opts: {opts}")
 
             # Album download mode
-            if opts.artist and opts.album and not opts.track:
-                album_details = self._get_album_details(opts.artist, opts.album, opts.url)
+            if opts.artist and opts.album:
+                album_details = self._fetch_album_metadata(opts.artist, opts.album, opts.url)
                 if not album_details:
                     return
 
@@ -92,30 +117,14 @@ class YTDLPPlugin(BeetsPlugin):
                 print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {album_details}{Colors.END}")
                 return
 
-            # Track download mode
-            if opts.artist and opts.track and not opts.album:
-                track_details = self._get_track_details(opts.artist, opts.track, opts.url)
-                if not track_details:
-                    return
-
-                track_dir = self._download_singleton(track_details)
-                if not track_dir:
-                    return
-
-                self._import_singleton(lib, track_dir)
-
-                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {track_details}{Colors.END}")
-                return
-
             # Missing items mode
             if opts.fetch_missing:
-                missing_albums: list[AlbumDetails] = self._list_missing(lib)
+                print("Not yet implemented")
 
             else:
                 print("\n".join((
                     f"{Colors.WARNING}[ytdlp] Invalid arguments. Please specify either:",
                     "\t--artist and --album",
-                    "\t--artist and --track",
                     "\t--fetch-missing{Colors.END}",
                 )))
                 return
@@ -145,11 +154,6 @@ class YTDLPPlugin(BeetsPlugin):
             help="Name of album",
         )
         parser.add_option(
-            "--track",
-            action="store",
-            help="Name of track",
-        )
-        parser.add_option(
             "-u", "--url",
             dest="url",
             action="store",
@@ -169,111 +173,80 @@ class YTDLPPlugin(BeetsPlugin):
 
         return parser 
 
-    def _get_track_details(self, artist: str, track: str, url: str | None) -> SingletonDetails | None:
-        """Get details for track on YouTube."""
-        # If the url has been passed in, use that
-        if url:
-            return SingletonDetails(title=track, artist=artist, track_url=url)
-
-        # Otherwise perform a search via YTMusic api
-        if self.config.get('verbose'):
-            print(f'[ytdlp] Searching for {artist} - {track} on YouTube Music')
-        ytmusic = YTMusic()
-        search_results: list[dict] = ytmusic.search(f'{artist} {track}', filter="songs")
-        if not search_results:
-            print(f'[ytdlp] No results found for {artist} - {track}')
-            print('[ytdlp] Please check the artist and track names and try again.')
-            print('[ytdlp] Or consider passing in the url to a track via the --url flag.')
-            return None
-        song_details: dict = search_results[0]
-        return SingletonDetails(
-            title=song_details['title'],
-            artist=song_details['artists'][0]['name'],
-            track_url="https://youtube.com/watch?v=" + song_details['videoId']
-        )
-
-    def _get_album_details(self, artist: str, album: str, url: str | None) -> AlbumDetails | None:
+    def _fetch_album_metadata(self, artist: str, album: str, url: str | None) -> AlbumMetadata | None:
         """Get details for album playlist on YouTube."""
-        # If the url has been passed in, use that
-        if url:
-            return AlbumDetails(title=album, artist=artist, playlist_url=url)
-
-        # Otherwise perform a search via YTMusic api
-        if self.config.get('verbose'):
-            print(f'[ytdlp] Searching for {artist} - {album} on YouTube Music')
         ytmusic = YTMusic()
-        search_results: list[dict] = ytmusic.search(f'{artist} {album}', filter="albums")
-        if not search_results:
-            print(f'[ytdlp] No results found for {artist} - {album}')
-            print('[ytdlp] Please check the artist and album names and try again.')
-            print('[ytdlp] Or consider passing in the url to a playlist via the --url flag.')
-            return None
-        album_details: dict = ytmusic.get_album(search_results[0]['browseId'])
-        available_tracks: bool = all([track['isAvailable'] for track in album_details['tracks']])
-        if not available_tracks:
+
+        if url:
+            # If the url has been passed in, use that
+            browse_id: str = ytmusic.get_album_browse_id(url)
+        else:
+            # Otherwise perform a search via YTMusic api
+            if self.config.get('verbose'):
+                print(f'[ytdlp] Searching for {artist} - {album} on YouTube Music')
+            search_results: list[dict] = ytmusic.search(f'{artist} {album}', filter="albums")
+            if not search_results:
+                print(f'[ytdlp] No results found for {artist} - {album}')
+                print('[ytdlp] Please check the artist and album names and try again.')
+                print('[ytdlp] Or consider passing in the url to a playlist via the --url flag.')
+                return None
+            # Take first result
+            browse_id = search_results[0]['browseId']
+
+        album_metadata: AlbumMetadata = dacite.from_dict(
+            AlbumMetadata,
+            ytmusic.get_album(browse_id),
+        )
+        
+        if len(album_metadata.available_tracks() < album_metadata.trackCount):
             print(f'[ytdlp] Not all tracks are available for {album} by {artist}')
             print("[ytdlp] Consider passing in the url to a playlist via the --url flag.")
             return None
-        return AlbumDetails(
-            title=album_details['title'],
-            artist=album_details['artists'][0]['name'],
-            playlist_url="https://youtube.com/playlist?list=" + album_details['audioPlaylistId']
-        )
 
-    def _download_album(self, ad: AlbumDetails) -> str:
-        """Download album from YouTube."""
+        return album_metadata
+
+    def _download_track_to_cache(self, track: TrackMetadata) -> pathlib.Path | None:
+        """Download track to cache."""
+
         if self.config.get('verbose'):
-            print(f'[ytdlp] Downloading {ad}')
+            print(f'[ytdlp] Downloading {track}')
+
+        outdir = self.cache_dir / track.artists[0].name / track.album
+
+        def filename_func(d):
+            print(d)
 
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
-            'outtmpl': self.cache_dir + "/" + ad.artist + "/" + ad.title + "/%(title)s.%(ext)s",
+            'outtmpl': f"{outdir.as_posix()}/{track.title}.%(ext)s",
             'postprocessors': [
                 {'key': 'FFmpegExtractAudio'},
                 {'key': 'FFmpegMetadata'},
             ],
+            'postprocessor_hooks': [filename_func],
         }
 
         with YoutubeDL(ydl_opts) as ydl:
-            returncode = ydl.download([ad.playlist_url])
+            returncode = ydl.download([track.url()])
 
         if returncode != 0:
-            print(f'[ytdlp] Error downloading {ad}')
-            return ""
+            print(f'[ytdlp] Error downloading {track}')
+            return None
 
-        return self.cache_dir + "/" + ad.artist + "/" + ad.title
+        # Write the URL to the metadata
+        f: mediafile.MediaFile = mediafile.MediaFile(outdir / f"{track.title}.opus")
+        f.url = track.url()
+        f.save()
 
-    def _download_singleton(self, sd: SingletonDetails) -> str:
-        """Download track from YouTube."""
-        if self.config.get('verbose'):
-            print(f'[ytdlp] Downloading {sd}')
+        return outdir
 
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'extractaudio': True,
-            'outtmpl': self.cache_dir + "/" + sd.artist + "/%(title)s.%(ext)s",
-            'postprocessors': [
-                {'key': 'FFmpegExtractAudio'},
-                {'key': 'FFmpegMetadata'},
-            ],
-        }
-
-        with YoutubeDL(ydl_opts) as ydl:
-            returncode = ydl.download([sd.track_url])
-
-        if returncode != 0:
-            print(f'[ytdlp] Error downloading {sd}')
-            return ""
-
-        return self.cache_dir + "/" + sd.artist
-
-    def _import_album(self, lib, album_dir: str) -> str | None:
+    def _import_album(self, lib, album_dir: pathlib.Path) -> pathlib.Path | None:
         """Import album into beets."""
-        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir])
+        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir.as_posix()])
         if os.getenv('BEETS_ENV') == 'develop':
             opts, args = ui.commands.import_cmd.parse_args(
-                ["-m", album_dir, "--config", "env.config.yml"],
+                ["-m", album_dir.as_posix(), "--config", "env.config.yml"],
             )
         if self.config.get('verbose'):
             print("[ytdlp] Running beet import with opts: " + str(opts))
@@ -282,26 +255,12 @@ class YTDLPPlugin(BeetsPlugin):
 
         return album_dir
 
-    def _import_singleton(self, lib, track_dir: str) -> str | None:
-        """Import track into beets."""
-        opts, args = ui.commands.import_cmd.parse_args(["-m", track_dir])
-        if os.getenv('BEETS_ENV') == 'develop':
-            opts, args = ui.commands.import_cmd.parse_args(
-                ["-m", track_dir, "--config", "env.config.yml"],
-            )
-        if self.config.get('verbose'):
-            print("[ytdlp] Running beet import with opts: " + str(opts))
-
-        ui.commands.import_cmd.func(lib, opts, args)
-
-        return track_dir
-
-    def _list_missing(self, lib) -> list[AlbumDetails]:
+    def _list_missing(self, lib) -> list[AlbumMetadata]:
         print("Not yet implemented")
         return []
 
-    def _clear_cache(self, d: str) -> None:
+    def _clear_cache(self, d: pathlib.Path) -> None:
         """Clear the cache of downloaded files."""
-        os.remove(d)
+        shutil.rmtree(d.as_posix())
         
 
