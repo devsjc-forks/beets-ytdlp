@@ -87,13 +87,13 @@ class YTDLPPlugin(BeetsPlugin):
         # - https://discourse.beets.io/t/how-to-use-custom-fields/202
         # - https://beets.readthedocs.io/en/stable/dev/plugins.html#extend-mediafile
         # - https://github.com/beetbox/mediafile/blob/e1de3640e253ff88f00e8495d3b7626ff6b3e2b8/mediafile.py#L1845C5-L1850C6
-        # url: mediafile.MediaField = mediafile.MediaField(
-        #     mediafile.MP3DescStorageStyle(key='WXXX', attr='url', multispec=False),
-        #     mediafile.MP4StorageStyle('\xa9url'),
-        #     mediafile.StorageStyle('URL'),
-        #     mediafile.ASFStorageStyle('WM/URL'),
-        # )
-        # self.add_media_field(u'url', url)
+        url: mediafile.MediaField = mediafile.MediaField(
+            mediafile.MP3DescStorageStyle(key='WXXX', attr='url', multispec=False),
+            mediafile.MP4StorageStyle('\xa9url'),
+            mediafile.StorageStyle('URL'),
+            mediafile.ASFStorageStyle('WM/URL'),
+        )
+        self.add_media_field(u'source_url', url)
 
     def commands(self):
         """Add commands to beets CLI."""
@@ -132,7 +132,7 @@ class YTDLPPlugin(BeetsPlugin):
                 return
 
         ytdlp_command = ui.Subcommand(
-            'ytdlp',
+            'ydl',
             help='Download albums from YouTube and import into beets',
             parser=self._parser(),
         )
@@ -218,6 +218,8 @@ class YTDLPPlugin(BeetsPlugin):
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
+            'verbose': False,
+            'quiet': True,
             'outtmpl': f"{outdir.as_posix()}/{track.title}.%(ext)s",
             'postprocessors': [
                 {'key': 'FFmpegExtractAudio'},
@@ -247,7 +249,7 @@ class YTDLPPlugin(BeetsPlugin):
                 ["-m", album_dir.as_posix(), "--config", "env.config.yml"],
             )
         if self.config.get('verbose'):
-            print("[ytdlp] Running beet import with opts: " + str(opts))
+            print(f"[ytdlp] Importing {album_dir}")
 
         ui.commands.import_cmd.func(lib, opts, args)
 
