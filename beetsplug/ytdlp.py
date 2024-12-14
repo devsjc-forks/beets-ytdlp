@@ -1,6 +1,8 @@
 from beets import config
 import dataclasses
 from beets import ui
+from beets.dbcore import types
+from beets.library import Item, Library
 from beets.plugins import BeetsPlugin
 import optparse
 import mediafile
@@ -66,6 +68,11 @@ class YTDLPPlugin(BeetsPlugin):
     config: dict
     cache_dir: pathlib.Path
 
+    item_types: dict[str, types.Type] = {
+        'source_url': types.STRING,
+        'url': types.STRING,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
         """Set default values."""
 
@@ -93,12 +100,15 @@ class YTDLPPlugin(BeetsPlugin):
             mediafile.StorageStyle('URL'),
             mediafile.ASFStorageStyle('WM/URL'),
         )
-        self.add_media_field(u'url', url)
+        self.add_media_field(u'source_url', url)
+
+        # Add listener for item moves
+        self.register_listener('item_moved', self._on_item_moved)
 
     def commands(self):
         """Add commands to beets CLI."""
 
-        def ytdlp_func(lib, opts: optparse.Values, args: list[str]) -> None:
+        def ytdlp_func(lib: Library, opts: optparse.Values, args: list[str]) -> None:
             """Download albums from YouTube and import into beets."""
             if self.config.get("verbose"):
                 print(f"[ytdlp] Running ytdlp with opts: {opts}")
@@ -109,6 +119,7 @@ class YTDLPPlugin(BeetsPlugin):
                 if not album_details:
                     return
 
+                album_dir: pathlib.Path
                 for track in album_details.track_iterator():
                     album_dir = self._download_track_to_cache(track)
                     if not album_dir:
@@ -121,7 +132,16 @@ class YTDLPPlugin(BeetsPlugin):
 
             # Missing items mode
             if opts.fetch_missing:
-                print("Not yet implemented")
+                for missing_album_tracks in  self._list_missing(lib):
+
+                    album_dir: pathlib.Path
+                    for track in missing_album_tracks:
+                        album_dir = self._download_track_to_cache(track)
+
+                    if album_dir:
+                        self._import_album(lib, album_dir)
+                
+                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {len(album_dirs)} albums{Colors.END}")
 
             else:
                 print("\n".join((
@@ -132,7 +152,7 @@ class YTDLPPlugin(BeetsPlugin):
                 return
 
         ytdlp_command = ui.Subcommand(
-            'ytdlp',
+            'ydl',
             help='Download albums from YouTube and import into beets',
             parser=self._parser(),
         )
@@ -213,12 +233,14 @@ class YTDLPPlugin(BeetsPlugin):
         if self.config.get('verbose'):
             print(f'[ytdlp] Downloading {track}')
 
-        outdir = self.cache_dir / track.artists[0].name / track.album
+        outdir: pathlib.Path = self.cache_dir / track.artists[0].name / track.album
 
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
-            'outtmpl': f"{outdir.as_posix()}/{track.title}.%(ext)s",
+            'verbose': False,
+            'quiet': True,
+            'outtmpl': f"{outdir.as_posix()}/{track.trackNumber:02d} - {track.title}.%(ext)s",
             'postprocessors': [
                 {'key': 'FFmpegExtractAudio'},
                 {'key': 'FFmpegMetadata'},
@@ -233,32 +255,59 @@ class YTDLPPlugin(BeetsPlugin):
             return None
 
         # Write the URL to the metadata
-        f: mediafile.MediaFile = mediafile.MediaFile(outdir / f"{track.title}.opus")
+        f: mediafile.MediaFile = mediafile.MediaFile(
+                outdir / f"{track.trackNumber:02d} - {track.title}.opus",
+        )
         f.url = track.url()
         f.save()
 
         return outdir
 
-    def _import_album(self, lib, album_dir: pathlib.Path) -> pathlib.Path | None:
+    def _import_album(self, lib: Library, album_dir: pathlib.Path) -> pathlib.Path | None:
         """Import album into beets."""
-        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir.as_posix()])
+        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir.as_posix(), "--from-scratch"])
         if os.getenv('BEETS_ENV') == 'develop':
             opts, args = ui.commands.import_cmd.parse_args(
                 ["-m", album_dir.as_posix(), "--config", "env.config.yml"],
             )
         if self.config.get('verbose'):
-            print("[ytdlp] Running beet import with opts: " + str(opts))
-
+            print(f"[ytdlp] Importing {album_dir}")
         ui.commands.import_cmd.func(lib, opts, args)
 
         return album_dir
 
-    def _list_missing(self, lib) -> list[AlbumMetadata]:
-        print("Not yet implemented")
-        return []
+    def _on_item_moved(self, item: Item, source: str, destination: str) -> None:
+        """Update the source_url field when an item is moved."""
+        if self.config.get('verbose'):
+            print(f"[ytdlp] Updating source_url for {item}")
+        f: mediafile.MediaFile = mediafile.MediaFile(destination)
+        item.source_url = f.url
+        item.store()
 
-    def _clear_cache(self, d: pathlib.Path) -> None:
+    def _list_missing(self, lib: Library) -> Iterator[list[TrackMetadata]]:
+        """List missing items.
+
+        Returns:
+            Iterator over list of TrackMetadata objects for each album.
+        """
+        for album in lib.albums():
+            # Download any missing items via their source_url
+            item: Item
+            album_tracks: list[TrackMetadata] = []
+            for item in album.items():
+                if not item.filepath.exists() and item.get("source_url"):
+                    album_tracks.append(TrackMetadata(
+                        title=item.get("title"),
+                        artists=[ArtistMetadata(name=item.get("artist"), id="")],
+                        trackNumber=item.get("track"),
+                        videoId=item.get("source_url").split('v=')[-1],
+                        album=item.get("album"),
+                        isAvailable=True,
+                    ))
+            yield album_tracks
+
+    def _clear_cache(self) -> None:
         """Clear the cache of downloaded files."""
-        shutil.rmtree(d.as_posix())
+        shutil.rmtree(self.cache_dir.as_posix())
         
 
