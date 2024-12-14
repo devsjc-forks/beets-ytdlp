@@ -82,15 +82,18 @@ class YTDLPPlugin(BeetsPlugin):
         if not self.config.get('verbose'):
             self.config['verbose'] = True
 
-        # Custom metadata fields
+        # Add URK tag as custom metadata field
         # See
         # - https://discourse.beets.io/t/how-to-use-custom-fields/202
         # - https://beets.readthedocs.io/en/stable/dev/plugins.html#extend-mediafile
-        # source_url_field = mediafile.MediaField(
-        #    mediafile.MP3DescStorageStyle(u'SourceURL'),
-        #    mediafile.StorageStyle(u'WOAF'),
-        # )
-        # self.add_media_field(u'url', source_url_field)
+        # - https://github.com/beetbox/mediafile/blob/e1de3640e253ff88f00e8495d3b7626ff6b3e2b8/mediafile.py#L1845C5-L1850C6
+        url: mediafile.MediaField = mediafile.MediaField(
+            mediafile.MP3DescStorageStyle(key='WXXX', attr='url', multispec=False),
+            mediafile.MP4StorageStyle('\xa9url'),
+            mediafile.StorageStyle('URL'),
+            mediafile.ASFStorageStyle('WM/URL'),
+        )
+        self.add_media_field(u'url', url)
 
     def commands(self):
         """Add commands to beets CLI."""
@@ -111,7 +114,7 @@ class YTDLPPlugin(BeetsPlugin):
                     if not album_dir:
                         return
 
-                self._import_album(lib, album_dir.as_posix())
+                self._import_album(lib, album_dir)
 
                 print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {album_details}{Colors.END}")
                 return
