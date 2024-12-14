@@ -108,11 +108,12 @@ class YTDLPPlugin(BeetsPlugin):
                 if not album_details:
                     return
 
-                album_dir = self._download_album(album_details)
-                if not album_dir:
-                    return
+                for track in album_details.track_iterator():
+                    album_dir = self._download_track_to_cache(track)
+                    if not album_dir:
+                        return
 
-                self._import_album(lib, album_dir)
+                self._import_album(lib, album_dir.as_posix())
 
                 print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {album_details}{Colors.END}")
                 return
