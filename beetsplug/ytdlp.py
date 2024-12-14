@@ -214,9 +214,6 @@ class YTDLPPlugin(BeetsPlugin):
 
         outdir = self.cache_dir / track.artists[0].name / track.album
 
-        def filename_func(d):
-            print(d)
-
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
@@ -225,7 +222,6 @@ class YTDLPPlugin(BeetsPlugin):
                 {'key': 'FFmpegExtractAudio'},
                 {'key': 'FFmpegMetadata'},
             ],
-            'postprocessor_hooks': [filename_func],
         }
 
         with YoutubeDL(ydl_opts) as ydl:
