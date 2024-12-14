@@ -213,14 +213,14 @@ class YTDLPPlugin(BeetsPlugin):
         if self.config.get('verbose'):
             print(f'[ytdlp] Downloading {track}')
 
-        outdir = self.cache_dir / track.artists[0].name / track.album
+        outdir: pathlib.Path = self.cache_dir / track.artists[0].name / track.album
 
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
             'verbose': False,
             'quiet': True,
-            'outtmpl': f"{outdir.as_posix()}/{track.title}.%(ext)s",
+            'outtmpl': f"{outdir.as_posix()}/{track.trackNumber:02d} - {track.title}.%(ext)s",
             'postprocessors': [
                 {'key': 'FFmpegExtractAudio'},
                 {'key': 'FFmpegMetadata'},
@@ -235,8 +235,10 @@ class YTDLPPlugin(BeetsPlugin):
             return None
 
         # Write the URL to the metadata
-        f: mediafile.MediaFile = mediafile.MediaFile(outdir / f"{track.title}.opus")
-        f.url = track.url()
+        f: mediafile.MediaFile = mediafile.MediaFile(
+                outdir / f"{track.trackNumber:02d} - {track.title}.opus",
+        )
+        f.source_url = track.url()
         f.save()
 
         return outdir
