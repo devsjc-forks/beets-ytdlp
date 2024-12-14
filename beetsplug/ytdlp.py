@@ -198,7 +198,7 @@ class YTDLPPlugin(BeetsPlugin):
             ytmusic.get_album(browse_id),
         )
         
-        if len(album_metadata.available_tracks() < album_metadata.trackCount):
+        if len(album_metadata.available_tracks()) < album_metadata.trackCount:
             print(f'[ytdlp] Not all tracks are available for {album} by {artist}')
             print("[ytdlp] Consider passing in the url to a playlist via the --url flag.")
             return None
