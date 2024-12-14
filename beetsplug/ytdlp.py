@@ -64,15 +64,13 @@ class YTDLPPlugin(BeetsPlugin):
     """A plugin for downloading music from YouTube and importing into beets."""
 
     config: dict
-    config_dir: str
-    cache_dir: str
+    cache_dir: pathlib.Path
 
     def __init__(self, *args, **kwargs) -> None:
         """Set default values."""
 
         super(YTDLPPlugin, self).__init__()
 
-        self.config_dir: str = config.config_dir()
         self.cache_dir: pathlib.Path = pathlib.Path(config["directory"].get() + "/.import")
 
         # Default options
