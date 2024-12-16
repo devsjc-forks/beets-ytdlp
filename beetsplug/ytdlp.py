@@ -272,7 +272,8 @@ class YTDLPPlugin(BeetsPlugin):
         """Update the source_url field when an item is moved."""
         if self.config.get('verbose'):
             print(f"[ytdlp] Updating source_url for {item}")
-        item.source_url = item.url
+        f: mediafile.MediaFile = mediafile.MediaFile(item.path)
+        item.source_url = f.url
         item.store()
 
     def _list_missing(self, lib) -> list[AlbumMetadata]:
