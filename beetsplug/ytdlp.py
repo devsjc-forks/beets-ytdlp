@@ -2,6 +2,7 @@ from beets import config
 import dataclasses
 from beets import ui
 from beets.dbcore import types
+from beets.library import Item
 from beets.plugins import BeetsPlugin
 import optparse
 import mediafile
@@ -268,11 +269,11 @@ class YTDLPPlugin(BeetsPlugin):
 
         return album_dir
 
-    def _on_item_moved(self, item, source, destination) -> None:
+    def _on_item_moved(self, item: Item, source: str, destination: str) -> None:
         """Update the source_url field when an item is moved."""
         if self.config.get('verbose'):
             print(f"[ytdlp] Updating source_url for {item}")
-        f: mediafile.MediaFile = mediafile.MediaFile(item.path)
+        f: mediafile.MediaFile = mediafile.MediaFile(destination)
         item.source_url = f.url
         item.store()
 
