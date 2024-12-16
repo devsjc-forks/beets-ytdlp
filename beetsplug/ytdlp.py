@@ -1,6 +1,7 @@
 from beets import config
 import dataclasses
 from beets import ui
+from beets.dbcore import types
 from beets.plugins import BeetsPlugin
 import optparse
 import mediafile
@@ -66,6 +67,11 @@ class YTDLPPlugin(BeetsPlugin):
     config: dict
     cache_dir: pathlib.Path
 
+    item_types: dict[str, types.Type] = {
+        'source_url': types.STRING,
+        'url': types.STRING,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
         """Set default values."""
 
@@ -94,6 +100,9 @@ class YTDLPPlugin(BeetsPlugin):
             mediafile.ASFStorageStyle('WM/URL'),
         )
         self.add_media_field(u'source_url', url)
+
+        # Add listener for item moves
+        self.register_listener('item_moved', self._on_item_moved)
 
     def commands(self):
         """Add commands to beets CLI."""
@@ -238,7 +247,7 @@ class YTDLPPlugin(BeetsPlugin):
         f: mediafile.MediaFile = mediafile.MediaFile(
                 outdir / f"{track.trackNumber:02d} - {track.title}.opus",
         )
-        f.source_url = track.url()
+        f.url = track.url()
         f.save()
 
         return outdir
@@ -252,17 +261,26 @@ class YTDLPPlugin(BeetsPlugin):
             )
         if self.config.get('verbose'):
             print(f"[ytdlp] Importing {album_dir}")
-
         ui.commands.import_cmd.func(lib, opts, args)
 
+        # Update the source_url field
+        ui.commands.update_cmd.parse_args(["-F", "source_url"])
+
         return album_dir
+
+    def _on_item_moved(self, item, source, destination) -> None:
+        """Update the source_url field when an item is moved."""
+        if self.config.get('verbose'):
+            print(f"[ytdlp] Updating source_url for {item}")
+        item.source_url = item.url
+        item.store()
 
     def _list_missing(self, lib) -> list[AlbumMetadata]:
         print("Not yet implemented")
         return []
 
-    def _clear_cache(self, d: pathlib.Path) -> None:
+    def _clear_cache(self) -> None:
         """Clear the cache of downloaded files."""
-        shutil.rmtree(d.as_posix())
+        shutil.rmtree(self.cache_dir.as_posix())
         
 
