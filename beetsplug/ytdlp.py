@@ -265,7 +265,7 @@ class YTDLPPlugin(BeetsPlugin):
 
     def _import_album(self, lib: Library, album_dir: pathlib.Path) -> pathlib.Path | None:
         """Import album into beets."""
-        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir.as_posix(), "--from-scratch"])
+        opts, args = ui.commands.import_cmd.parse_args(["-m", album_dir.as_posix()])
         if os.getenv('BEETS_ENV') == 'develop':
             opts, args = ui.commands.import_cmd.parse_args(
                 ["-m", album_dir.as_posix(), "--config", "env.config.yml"],
