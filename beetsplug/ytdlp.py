@@ -252,6 +252,7 @@ class YTDLPPlugin(BeetsPlugin):
                 {'key': 'FFmpegExtractAudio'},
                 {'key': 'FFmpegMetadata'},
             ],
+            'embed-metadata': True,
         }
 
         with YoutubeDL(ydl_opts) as ydl:
