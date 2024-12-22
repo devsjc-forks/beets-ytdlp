@@ -132,16 +132,23 @@ class YTDLPPlugin(BeetsPlugin):
 
             # Missing items mode
             if opts.fetch_missing:
+                num_albums: int = 0
                 for missing_album_tracks in  self._list_missing(lib):
+                    print(
+                        f"Fetching {missing_album_tracks[0].album} "
+                        f"by {missing_album_tracks[0].artists[0].name}",
+                    )
 
                     album_dir: pathlib.Path
                     for track in missing_album_tracks:
-                        album_dir = self._download_track_to_cache(track)
+                        out = self._download_track_to_cache(track)
+                        album_dir = out if out else album_dir
 
                     if album_dir:
                         self._import_album(lib, album_dir)
+                    num_albums += 1
                 
-                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {len(album_dirs)} albums{Colors.END}")
+                print(f"{Colors.SUCCESS}[ytdlp] Successfully imported {num_albums} albums{Colors.END}")
 
             else:
                 print("\n".join((
