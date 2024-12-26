@@ -210,7 +210,6 @@ class YTDLPPlugin(BeetsPlugin):
         if url:
             # If the url has been passed in, use that
             browse_id: str = ytmusic.get_album_browse_id(url)
-            playlist_info: dict = 
             album_metadata: AlbumMetadata = dacite.from_dict(
                 AlbumMetadata,
                 ytmusic.get_playlist(url.split('list=')[-1]),
