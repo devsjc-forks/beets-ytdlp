@@ -205,10 +205,18 @@ class YTDLPPlugin(BeetsPlugin):
     def _fetch_album_metadata(self, artist: str, album: str, url: str | None) -> AlbumMetadata | None:
         """Get details for album playlist on YouTube."""
         ytmusic = YTMusic()
+        album_metadata: AlbumMetadata
 
         if url:
             # If the url has been passed in, use that
             browse_id: str = ytmusic.get_album_browse_id(url)
+            playlist_info: dict = 
+            album_metadata: AlbumMetadata = dacite.from_dict(
+                AlbumMetadata,
+                ytmusic.get_playlist(url.split('list=')[-1]),
+            )
+            album_metadata.artists = [ArtistMetadata(name=artist, id="")]
+            album_metadata.album = album
         else:
             # Otherwise perform a search via YTMusic api
             if self.config.get('verbose'):
@@ -222,10 +230,10 @@ class YTDLPPlugin(BeetsPlugin):
             # Take first result
             browse_id = search_results[0]['browseId']
 
-        album_metadata: AlbumMetadata = dacite.from_dict(
-            AlbumMetadata,
-            ytmusic.get_album(browse_id),
-        )
+            album_metadata: AlbumMetadata = dacite.from_dict(
+                AlbumMetadata,
+                ytmusic.get_album(browse_id),
+            )
         
         if len(album_metadata.available_tracks()) < album_metadata.trackCount:
             print(f'[ytdlp] Not all tracks are available for {album} by {artist}')
