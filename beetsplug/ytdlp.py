@@ -210,12 +210,15 @@ class YTDLPPlugin(BeetsPlugin):
         if url:
             # If the url has been passed in, use that
             browse_id: str = ytmusic.get_album_browse_id(url)
+            playlist_id: str = url.split("list=")[-1]
             album_metadata: AlbumMetadata = dacite.from_dict(
                 AlbumMetadata,
-                ytmusic.get_playlist(url.split('list=')[-1]),
+                ytmusic.get_playlist(playlist_id) | {
+                    "audioPlaylistId": playlist_id,
+                    "artists": [{"name": artist, "id": ""}],
+                    "album": album,
+                },
             )
-            album_metadata.artists = [ArtistMetadata(name=artist, id="")]
-            album_metadata.album = album
         else:
             # Otherwise perform a search via YTMusic api
             if self.config.get('verbose'):
