@@ -26,6 +26,10 @@ class ArtistMetadata:
     name: str
     id: str
 
+    def __post_init__(self) -> None:
+        """Replace any invalid characters."""
+        self.name = self.name.replace("/", "-")
+
 @dataclasses.dataclass
 class TrackMetadata:
     title: str
@@ -34,6 +38,11 @@ class TrackMetadata:
     videoId: str
     album: str
     isAvailable: bool
+
+    def __post_init__(self) -> None:
+        """Replace any invalid characters."""
+        self.title = self.title.replace("/", "-")
+        self.album = self.album.replace("/", "-")
 
     def url(self) -> str:
         return "https://youtube.com/watch?v=" + self.videoId
@@ -49,11 +58,15 @@ class AlbumMetadata:
     audioPlaylistId: str
     tracks: list[TrackMetadata]
 
-    def url(self) -> str:
-        return "https://youtube.com/playlist?list=" + self.audioPlaylistId
+    def __post__init__(self) -> None:
+        """Replace any invalid characters."""
+        self.title = self.title.replace("/", "-")
 
     def __str__(self) -> str:
         return f'{self.title} by {self.artists[0].name}'
+
+    def url(self) -> str:
+        return "https://youtube.com/playlist?list=" + self.audioPlaylistId
 
     def available_tracks(self) -> list[TrackMetadata]:
         return [track for track in self.tracks if track.isAvailable]
