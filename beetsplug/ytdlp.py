@@ -273,11 +273,16 @@ class YTDLPPlugin(BeetsPlugin):
             return None
 
         # Write the URL to the metadata
-        f: mediafile.MediaFile = mediafile.MediaFile(
-                outdir / f"{track.trackNumber:02d} - {track.title}.opus",
-        )
-        f.url = track.url()
-        f.save()
+        try:
+            f: mediafile.MediaFile = mediafile.MediaFile(
+                    outdir / f"{track.trackNumber:02d} - {track.title}.opus",
+            )
+            f.url = track.url()
+            f.track = track.trackNumber
+            f.save()
+        except Exception as e:
+            print(f'[ytdlp] Error writing metadata for {track}')
+            return None
 
         return outdir
 
