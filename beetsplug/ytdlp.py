@@ -267,6 +267,8 @@ class YTDLPPlugin(BeetsPlugin):
                 {'key': 'FFmpegMetadata'},
             ],
             'embed-metadata': True,
+            "restrictfilenames": True,
+            "windowsfilenames": True,
         }
 
         with YoutubeDL(ydl_opts) as ydl:
