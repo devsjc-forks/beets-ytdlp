@@ -216,7 +216,8 @@ class YTDLPPlugin(BeetsPlugin):
             # Add missing details to playlist info dictionary
             for i, track in enumerate(playlist_info['tracks']):
                 playlist_info['tracks'][i]['trackNumber'] = i + 1
-                playlist_info["tracks"][i]["album"] = track["album"]["name"]
+                playlist_info["tracks"][i]["album"] = track["album"]["name"] \ 
+                    if "album" in track else album
             playlist_info['audioPlaylistId'] = playlist_id
             playlist_info['artists'] = [{"name": artist, "id": ""}]
             playlist_info['album'] = album
