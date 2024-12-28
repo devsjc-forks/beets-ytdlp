@@ -299,6 +299,7 @@ class YTDLPPlugin(BeetsPlugin):
             )
             f.url = track.url()
             f.track = track.trackNumber
+            f.title = track.title
             f.save()
         except Exception as e:
             print(f'[ytdlp] Error writing metadata for {track}')
