@@ -12,6 +12,7 @@ import shutil
 import os
 import pathlib
 import dacite
+import re
 from collections.abc import Iterator
 
 class Colors():
@@ -28,7 +29,7 @@ class ArtistMetadata:
 
     def __post_init__(self) -> None:
         """Replace any invalid characters."""
-        self.name = self.name.replace("/", "-")
+        self.name = re.sub('\W+',' ', self.name)
 
 @dataclasses.dataclass
 class TrackMetadata:
@@ -41,8 +42,8 @@ class TrackMetadata:
 
     def __post_init__(self) -> None:
         """Replace any invalid characters."""
-        self.title = self.title.replace("/", "-")
-        self.album = self.album.replace("/", "-")
+        self.title = re.sub('\W+',' ', self.title)
+        self.album = re.sub('\W+',' ', self.album)
 
     def url(self) -> str:
         return "https://youtube.com/watch?v=" + self.videoId
@@ -60,7 +61,7 @@ class AlbumMetadata:
 
     def __post__init__(self) -> None:
         """Replace any invalid characters."""
-        self.title = self.title.replace("/", "-")
+        self.title = re.sub('\W+',' ', self.title)
 
     def __str__(self) -> str:
         return f'{self.title} by {self.artists[0].name}'
