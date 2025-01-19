@@ -250,10 +250,13 @@ class YTDLPPlugin(BeetsPlugin):
             # Take first result
             browse_id = search_results[0]['browseId']
 
-            album_metadata: AlbumMetadata = dacite.from_dict(
-                AlbumMetadata,
-                ytmusic.get_album(browse_id),
-            )
+        album_metadata: AlbumMetadata = dacite.from_dict(
+            AlbumMetadata,
+            ytmusic.get_album(browse_id) | {
+                'title': album,
+                'artists': [ArtistMetadata(name=artist, id='')],
+            },
+        )
         
         if len(album_metadata.available_tracks()) < album_metadata.trackCount:
             print(f'[ytdlp] Not all tracks are available for {album} by {artist}')
